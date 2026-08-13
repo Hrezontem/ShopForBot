@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Виртуальное окружение
+.venv/
+venv/
+ENV/
+
+# База данных (локальная, не коммитим)
+db.sqlite3
+db.sqlite3-journal
+
+# Загрузки пользователей (картинки товаров)
+media/
+
+# Статика, если собирается
+staticfiles/
+
+# Переменные окружения и секреты
+.env
+.env.local
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Логи
+*.log
