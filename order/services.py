@@ -1,5 +1,7 @@
+from statistics import quantiles
+
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 
 from shop.models import ProductVariant
 
@@ -36,55 +38,56 @@ def add_to_cart(user, product_variant_id, quantity=1):
 
     return item
 
-def checkout_cart_to_order(user, delivery_method="post", delivery_address=""):
-    """
-    Конвертирует корзину пользователя в реальный заказ.
-    Возвращает созданный объект Order или вызывает ValidationError.
-    """
+
+# Входными данными будет User от которого будут ссылаться на Cart, а с него на CartItem, которые надо перенести В Order
+# а также комментарий и способ доставки
+# Работать всё будет в одной транзакции
+# 1. Находим Cart по User
+# 2. Проверяем пустая ли Cart
+# 2.1 Если пустая, то возвращаем ошибку, что корзина пустая и заказ оформить не получается
+# 3. Создаем Order, присваиваем ему user и переносим перс данные
+# в поля с припиской recipient
+# 4. Далее переносим все CartItem в OrderItem и блокируем все строки, чтобы не было того что юзеры спишут один и тот же товар
+# 5. Заполняем цены из товаров для сохранения историчности
+# 6. Заполняется комментарий, если требуется и способ доставки
+# 7. Списываем сток с товаров
+# 8. Очищаем корзину
+# 9. Сохраняем заказ
+
+def create_order(user, comment, delivery_method="post"):
     with transaction.atomic():
-        try:
-            cart = Cart.objects.get(user=user)
-        except Cart.DoesNotExist:
-            raise ValidationError("Корзина пуста или не существует")
-
-        cart_items = cart.items.select_related("variant__product").all()
-        if not cart_items.exists():
-            raise ValidationError("В вашей корзине нет товаров")
-
-        for item in cart_items:
-            if item.variant.stock < item.quantity:
-                raise ValidationError(
-                    f"Недостаточно товара {item.variant.product.name} (Размер: {item.variant.size}) на складе."
-                    f"Доступно: {item.variant.stock} шт., в корзине: {item.quantity} шт."
-                )
+        cart = Cart.objects.filter(user=user).first()
+        if cart is None or not cart.items.exists():
+            raise ValueError("Корзина пуста или несуществует")
         order = Order.objects.create(
             user=user,
+            recipient_last_name=user.last_name,
+            recipient_first_name=user.first_name,
+            recipient_mid_name=user.mid_name,
+            recipient_phone=user.phone,
+            recipient_address=user.address,
+            recipient_email=user.email,
+            comment=comment,
             delivery_method=delivery_method,
-            comment=f"Оформлено из корзины. Адрес по умолчанию: {delivery_address}"
-            if delivery_address
-            else "",
+
         )
-
-        for item in cart_items:
-            product = item.variant.product
-
-            price_before = product.price
-            price_final = product.discount_price or product.price
-            pct = product.discount_percent
-
+        variant_ids = [item.variant_id for item in cart.items.all()]
+        locked = (ProductVariant.objects.select_for_update().select_related("product").filter(id__in=variant_ids))
+        variants = {v.id: v for v in locked}
+        for item in cart.items.select_related("variant__product"):
+            variant = variants[item.variant_id]
+            product = variant.product
+            if variant.stock < item.quantity:
+                raise ValueError(f"Недостаточно товара: {product.name}, осталось {variant.stock}")
             OrderItem.objects.create(
                 order=order,
-                variant=item.variant,
+                variant=variant,
                 quantity=item.quantity,
-                price_before_discount=price_before,
-                price_at_purchase=price_final,
-                discount_percent=pct,
+                price_before_discount=product.price,
+                price_at_purchase = product.discount_price or product.price,
+                discount_percent = product.discount_percent
             )
-
-            variant = item.variant
             variant.stock -= item.quantity
             variant.save()
-
-        cart_items.delete()
-
-        return order
+        cart.delete()
+    return order
