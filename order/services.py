@@ -1,7 +1,4 @@
-from statistics import quantiles
-
-from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import transaction
 
 from shop.models import ProductVariant
 
@@ -39,6 +36,20 @@ def add_to_cart(user, product_variant_id, quantity=1):
     return item
 
 
+def remove_cart_item(user, cart_item_id):
+    cart_item = CartItem.objects.filter(id=cart_item_id, cart__user=user).first()
+    if cart_item is None:
+        raise ValueError("Позиция не найдена")
+    cart_item.delete()
+
+
+def clear_cart(user):
+    cart = Cart.objects.filter(user=user).first()
+    if cart is None:
+        raise ValueError("Корзина пуста")
+    cart.delete()
+
+
 # Входными данными будет User от которого будут ссылаться на Cart, а с него на CartItem, которые надо перенести В Order
 # а также комментарий и способ доставки
 # Работать всё будет в одной транзакции
@@ -53,6 +64,7 @@ def add_to_cart(user, product_variant_id, quantity=1):
 # 7. Списываем сток с товаров
 # 8. Очищаем корзину
 # 9. Сохраняем заказ
+
 
 def create_order(user, comment, delivery_method="post"):
     with transaction.atomic():
@@ -69,23 +81,28 @@ def create_order(user, comment, delivery_method="post"):
             recipient_email=user.email,
             comment=comment,
             delivery_method=delivery_method,
-
         )
         variant_ids = [item.variant_id for item in cart.items.all()]
-        locked = (ProductVariant.objects.select_for_update().select_related("product").filter(id__in=variant_ids))
+        locked = (
+            ProductVariant.objects.select_for_update()
+            .select_related("product")
+            .filter(id__in=variant_ids)
+        )
         variants = {v.id: v for v in locked}
         for item in cart.items.select_related("variant__product"):
             variant = variants[item.variant_id]
             product = variant.product
             if variant.stock < item.quantity:
-                raise ValueError(f"Недостаточно товара: {product.name}, осталось {variant.stock}")
+                raise ValueError(
+                    f"Недостаточно товара: {product.name}, осталось {variant.stock}"
+                )
             OrderItem.objects.create(
                 order=order,
                 variant=variant,
                 quantity=item.quantity,
                 price_before_discount=product.price,
-                price_at_purchase = product.discount_price or product.price,
-                discount_percent = product.discount_percent
+                price_at_purchase=product.discount_price or product.price,
+                discount_percent=product.discount_percent,
             )
             variant.stock -= item.quantity
             variant.save()
