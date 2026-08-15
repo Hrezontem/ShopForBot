@@ -10,6 +10,5 @@ class AddToCartData(CallbackData, prefix="addcart"):
 class DeleteCartItemData(CallbackData, prefix="del_cart_item"):
     cart_item_id: int
 
-
 class ChangeCartItemData(CallbackData, prefix="change_cart_item"):
     cart_item_id: int
