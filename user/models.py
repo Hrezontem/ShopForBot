@@ -26,8 +26,9 @@ class User(AbstractUser):
 
 class TelegramProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="tg_profile")
-    tg_uid = models.CharField(max_length=255, verbose_name="TG ID")
-    tg_username = models.CharField(max_length=255, verbose_name="Имя пользователя TG")
+    tg_uid = models.CharField(max_length=255, verbose_name="TG ID", unique=True)
+    tg_username = models.CharField(max_length=255, verbose_name="Юзернейм TG")
+    tg_fullname = models.CharField(max_length=255, verbose_name="Имя пользователя TG", default="")
 
     def __str__(self):
         return f"TG Profile: {self.tg_uid}"
