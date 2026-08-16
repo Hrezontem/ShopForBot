@@ -4,7 +4,7 @@ from django.conf import settings
 from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
 
-from shop.models import Product, ProductVariant
+from shop.models import ProductVariant
 
 
 class Cart(models.Model):
@@ -57,17 +57,23 @@ class Order(models.Model):
     )
 
     recipient_last_name = models.CharField(
-        max_length=255, blank=False,verbose_name="Фамилия получателя", default=""
+        max_length=255, blank=False, verbose_name="Фамилия получателя", default=""
     )
     recipient_first_name = models.CharField(
-        max_length=255, blank=False,verbose_name="Имя получателя", default=""
+        max_length=255, blank=False, verbose_name="Имя получателя", default=""
     )
     recipient_mid_name = models.CharField(
-        max_length=255, blank=False,verbose_name="Отчество получателя", default=""
+        max_length=255, blank=True, verbose_name="Отчество получателя", default=""
     )
-    recipient_phone = PhoneNumberField(region="RU", blank=False,verbose_name="Номер телефона", default="")
-    recipient_address = models.CharField(max_length=255, blank=False, verbose_name="Адрес получателя", default="")
-    recipient_email = models.EmailField(max_length=255, blank=True,verbose_name="Эл. почта получателя")
+    recipient_phone = PhoneNumberField(
+        region="RU", blank=False, verbose_name="Номер телефона", default=""
+    )
+    recipient_address = models.CharField(
+        max_length=255, blank=False, verbose_name="Адрес получателя", default=""
+    )
+    recipient_email = models.EmailField(
+        max_length=255, blank=True, verbose_name="Эл. почта получателя"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
