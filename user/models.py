@@ -24,6 +24,10 @@ class User(AbstractUser):
     def __str__(self):
         return f"{self.last_name} {self.first_name} {self.mid_name}".strip() or self.username
 
+    @property
+    def is_profile_complete(self):
+        return bool(self.first_name and self.last_name and self.phone and self.address)
+
 class TelegramProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="tg_profile")
     tg_uid = models.CharField(max_length=255, verbose_name="TG ID", unique=True)
@@ -31,4 +35,4 @@ class TelegramProfile(models.Model):
     tg_fullname = models.CharField(max_length=255, verbose_name="Имя пользователя TG", default="")
 
     def __str__(self):
-        return f"TG Profile: {self.tg_uid}"
+        return f"TG Profile: {self.tg_username}"
