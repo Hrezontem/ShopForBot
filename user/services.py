@@ -38,3 +38,12 @@ def get_or_create_user_from_telegram(telegram_user):
             tg_fullname=tg_full_name
         )
     return user
+
+
+def update_profile(user, **fields):
+    ALLOWED = {"first_name", "mid_name","last_name", "phone", "address", "email"}
+    for key, value in fields.items():
+        if key not in ALLOWED:
+            raise ValueError(f"Поле {key} нельзя поменять")
+        setattr(user, key, value)
+    user.save()
