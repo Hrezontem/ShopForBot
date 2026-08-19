@@ -15,3 +15,6 @@ class ChangeCartItemData(CallbackData, prefix="change_cart_item"):
 
 class EditProfileData(CallbackData, prefix="edit_profile"):
     field: str
+
+class DeliveryData(CallbackData, prefix="delivery"):
+    method: str

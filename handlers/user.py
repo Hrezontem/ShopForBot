@@ -15,6 +15,7 @@ import keyboards.userkb as kb
 from handlers.callback_data import (
     AddToCartData,
     DeleteCartItemData,
+    DeliveryData,
     EditProfileData,
     ProductClickData,
 )
@@ -82,7 +83,6 @@ def validate_field(field, value):
 
 async def after_field_saved(event, state, user):
     data = await state.get_data()
-
     if data.get("mode") != "checkout":
         await state.clear()
         await render_profile(event, user)
@@ -95,8 +95,11 @@ async def after_field_saved(event, state, user):
             await event.answer(QUESTIONS[field])
             return
 
-    await state.clear()
-    await finalize_order(event, user)
+    # checkout-ветка после последнего обязательного поля:
+    await state.set_state(None)
+    await state.set_data({"delivery": "post", "comment": ""})
+    django_user = await get_or_create_user_from_telegram(event.from_user)
+    await render_checkout(event, django_user, await state.get_data())
 
 
 def build_cart_text(items):
@@ -111,6 +114,32 @@ def build_cart_text(items):
 
         cart_text += f"{num}. {name} — {size}\n     x {qty} — {price} ₽\n"
     return cart_text
+
+
+DELIVERY_LABELS = {"post": "СДЭК ПВЗ", "courier": "СДЭК курьер"}
+async def render_checkout(callback, user, data):
+    cart, items = await get_cart_with_items(user)
+
+    if cart is None or items == []:
+        await callback.message.edit_media(
+            media=InputMediaPhoto(media=menu_photo, caption="🛒 Ваша корзина пуста. Добавьте в корзину товар и оформите заказ."),
+            reply_markup=kb.cart_items_keyboard(items),
+        )
+        return
+    text = build_cart_text(items)
+    delivery = DELIVERY_LABELS.get(data.get("delivery", "post"))
+    comment = data.get("comment") or "—"
+    await callback.message.edit_media(
+        media=InputMediaPhoto(
+            media=menu_photo,
+            caption="🛒 Ваша корзина\n\n"
+            + f"{text}\n"
+            + f"Итого: {cart.total_cart_cost} ₽\n"
+            + f"🚚 Доставка: {delivery}\n"
+            + f"💬 Комментарий: {comment}"
+        ),
+        reply_markup=kb.checkout_keyboard(),
+    )
 
 
 async def render_cart(callback, user):
@@ -363,7 +392,24 @@ async def checkout(callback: CallbackQuery, state: FSMContext):
             )
             return
 
-    await finalize_order(callback, django_user)
+    await state.set_data({"delivery": "post", "comment": ""})
+    await render_checkout(callback, django_user, await state.get_data())
+
+@user.callback_query(F.data == "choice_delivery_method")
+async def choice_delivery(callback: CallbackQuery):
+    await callback.answer()
+    await callback.message.edit_caption(
+        caption="Выберите способ доставки:",
+        reply_markup=kb.delivery_keyboard(),
+    )
+
+@user.callback_query(DeliveryData.filter())
+async def set_delivery(callback, callback_data: DeliveryData, state: FSMContext):
+    await state.update_data(delivery=callback_data.method)
+    await callback.answer()
+    django_user = await get_user_from_telegram(callback.from_user)
+    await render_checkout(callback, django_user, await state.get_data())
+
 
 
 def order_success_text(order):
@@ -373,17 +419,25 @@ def order_success_text(order):
         "Мы свяжемся с вами для подтверждения."
     )
 
-async def finalize_order(event, user):
-    try:
-        order = await sync_to_async(create_order)(user, comment="")
-    except ValueError as e:
-        if isinstance(event, CallbackQuery):
-            await event.answer(str(e), show_alert=True)
-        else:
-            await event.answer(str(e))
+@user.callback_query(F.data == "checkout_confirm")
+async def checkout_confirm(callback: CallbackQuery, state: FSMContext):
+    django_user = await get_user_from_telegram(callback.from_user)
+    if django_user is None:
+        await callback.answer("Вы не зарегистрированы.", show_alert=True)
         return
+
+    data = await state.get_data()
+    try:
+        order = await sync_to_async(create_order)(
+            django_user,
+            comment=data.get("comment", ""),
+            delivery_method=data.get("delivery", "post"),
+        )
+    except ValueError as e:
+        await callback.answer(str(e), show_alert=True)
+        return
+
+    await state.clear()                      # заказ создан — checkout-данные больше не нужны
     text = await sync_to_async(order_success_text)(order)
-    if isinstance(event, CallbackQuery):
-        await event.message.edit_caption(caption=text, reply_markup=kb.to_main_menu_keyboard())
-    else:
-        await event.answer(text, reply_markup=kb.to_main_menu_keyboard())
+    await callback.answer()
+    await callback.message.edit_caption(caption=text, reply_markup=kb.to_main_menu_keyboard())

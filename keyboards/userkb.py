@@ -7,6 +7,7 @@ from handlers.callback_data import (
     AddToCartData,
     ChangeCartItemData,
     DeleteCartItemData,
+    DeliveryData,
     EditProfileData,
     ProductClickData,
 )
@@ -135,4 +136,22 @@ def change_profile_keyboard() -> InlineKeyboardMarkup:
     builder.button(text="Адрес", callback_data=EditProfileData(field="address").pack())
     builder.adjust(2)
     builder.row(back_button("myprofile"))
+    return builder.as_markup()
+
+
+def checkout_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Выбрать способ доставки", callback_data="choice_delivery_method")
+    builder.button(text="Добавить комментарий", callback_data="add_comment")
+    builder.button(text="✅ Оформить заказ", callback_data="checkout_confirm")
+    builder.button(text="❌ Выйти", callback_data="main_menu")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def delivery_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="СДЭК ПВЗ", callback_data=DeliveryData(method="post").pack())
+    builder.button(text="СДЭК Курьер", callback_data=DeliveryData(method="courier").pack())
+    builder.adjust(1)
     return builder.as_markup()
