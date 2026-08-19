@@ -89,6 +89,10 @@ class Order(models.Model):
     def __str__(self):
         return f"{self.id} ({self.get_delivery_method_display()}) от {self.user.last_name} {self.user.first_name} {self.user.mid_name}"
 
+    @property
+    def total_order_cost(self) -> Decimal:
+        return sum(item.total_price for item in self.items.all())
+
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")

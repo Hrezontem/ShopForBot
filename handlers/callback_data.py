@@ -12,3 +12,6 @@ class DeleteCartItemData(CallbackData, prefix="del_cart_item"):
 
 class ChangeCartItemData(CallbackData, prefix="change_cart_item"):
     cart_item_id: int
+
+class EditProfileData(CallbackData, prefix="edit_profile"):
+    field: str
