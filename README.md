@@ -1,5 +1,3 @@
-Here is a simplified, strictly "to-the-point" English README. It cuts out the fluff and focuses entirely on how to set up, run, and configure the project, with a strong emphasis on the bot token workflow.
-
 # ShopForBot
 
 > ⚠️ **Work In Progress**: This project is under active development. Features and database schemas may change.
