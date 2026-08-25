@@ -1,46 +1,133 @@
-# 🛒 ShopForBot
+Here is a simplified, strictly "to-the-point" English README. It cuts out the fluff and focuses entirely on how to set up, run, and configure the project, with a strong emphasis on the bot token workflow.
 
-![Status: Work In Progress](https://img.shields.io/badge/Status-Work%20In%20Progress-yellow)
-![Python](https://img.shields.io/badge/Python-3.14-blue)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED)
+# ShopForBot
 
-> ⚠️ **DISCLAIMER: This project is currently under active development.**  
-> Features, database schemas, and API endpoints are subject to change without notice. It is not yet ready for production use.
+> ⚠️ **Work In Progress**: This project is under active development. Features and database schemas may change.
 
-**ShopForBot** is a Telegram-based e-commerce bot powered by a robust Django backend. It is designed to provide a seamless shopping experience through Telegram, managed via a comprehensive Django administration panel. The project is containerized with Docker and utilizes the modern, ultra-fast `uv` package manager for dependency resolution.
+A Telegram e-commerce bot powered by a Django backend and PostgreSQL, containerized with Docker and using `uv` for dependency management.
 
 ---
 
-## 🛠 Technology Stack
-
-- **Language**: Python 3.14
-- **Package Manager**: [`uv`](https://github.com/astral-sh/uv) (for blazing-fast dependency management)
-- **Backend Framework**: Django 6.1+ 
-  - `django-jazzmin` (Enhanced admin UI)
-  - `django-phonenumber-field` (Phone number validation)
-- **Telegram Bot Framework**: `aiogram` 3.x (Async Python bot library)
+## 🛠 Tech Stack
+- **Python**: 3.14
+- **Backend**: Django 6.1+ (with Jazzmin admin)
+- **Bot**: aiogram 3.x
 - **Database**: PostgreSQL 15
-- **Containerization**: Docker & Docker Compose
-- **Environment Management**: `.env` files via `python-dotenv`
+- **Tooling**: Docker, Docker Compose, `uv`
+
+---
+
+## 🚀 Quick Start (Docker)
+
+### 1. Environment Setup
+Copy the environment template and fill in your database credentials:
+```bash
+cp .env.example .env
+```
+*(Edit `.env` and set a secure `POSTGRES_PASSWORD`)*
+
+### 2. Start Services
+Build and run the containers in the background:
+```bash
+docker compose up --build -d
+```
+
+### 3. Initialize Database
+Apply migrations and create an admin user:
+```bash
+docker compose exec django uv run python back/manage.py migrate
+docker compose exec django uv run python back/manage.py createsuperuser
+```
+
+---
+
+## 🤖 Bot Configuration (Critical)
+
+The bot token is **not** stored in `.env`. It is read directly from the PostgreSQL database via Django. 
+
+**To make the bot work, follow these exact steps:**
+
+1. **Get a Token**: Message [@BotFather](https://t.me/BotFather) on Telegram, create a new bot, and copy the API token.
+2. **Add to Database**: 
+   - Go to [http://localhost:8000/admin/](http://localhost:8000/admin/)
+   - Log in with your superuser credentials.
+   - Navigate to the Bot Configuration model and add your token.
+   - Save the changes.
+3. **Restart the Bot**: The bot container **must** be restarted to read the new token from the database:
+   ```bash
+   docker compose restart bot
+   ```
+4. **Verify**: Check the logs to ensure it connected successfully:
+   ```bash
+   docker compose logs -f bot
+   ```
+   *(You should see "Bot started successfully" or similar polling messages).*
+
+---
+
+## 🔧 Essential Commands
+
+| Command | Description |
+|---------|-------------|
+| `docker compose up --build -d` | Build and start all services in background |
+| `docker compose down` | Stop and remove all containers |
+| `docker compose restart bot` | Restart bot (required after changing token in DB) |
+| `docker compose logs -f bot` | View real-time bot logs |
+| `docker compose exec django bash` | Open shell inside Django container |
+
+---
+
+## ⚠️ Common Issues
+
+**Bot doesn't respond after adding the token**  
+→ You forgot to restart the bot container. Run: `docker compose restart bot`.
+
+**`FileNotFoundError` when sending images**  
+→ Linux (Docker) is case-sensitive. Ensure the filename in your code exactly matches the file on disk (e.g., `menu.png`, not `Menu.PNG`). Always use absolute paths via Django settings:  
+`Path(settings.MEDIA_ROOT) / 'bot' / 'menu.png'`
+
+**`ModuleNotFoundError: No module named 'core'`**  
+→ Ensure `PYTHONPATH=/app/back` is set in the `bot` service environment in `docker-compose.yml`.
 
 ---
 
 ## 📂 Project Structure
-
-The project follows a monorepo-style structure with a single `pyproject.toml` managing dependencies for both the backend and the bot.
-
 ```text
 ShopForBot/
-├── back/                   # Django Backend Application
-│   ├── core/               # Project settings (settings.py, urls.py, wsgi.py)
-│   ├── media/              # User-uploaded media files (e.g., product images)
-│   └── manage.py           # Django command-line utility
-├── bot/                    # Telegram Bot Application (aiogram)
-│   ├── handlers/           # Command and message handlers (e.g., /start, /cart)
-│   ├── middleware/         # Custom middleware (logging, state management)
-│   └── bot.py              # Bot entry point and initialization script
-├── docker-compose.yml      # Docker orchestration configuration
-├── pyproject.toml          # Unified dependency manifest for the entire project
-├── uv.lock                 # Locked dependency versions for reproducible builds
-├── .env.example            # Template for environment variables
-└── README.md               # This file
+├── back/               # Django app (core settings, manage.py, media)
+├── bot/                # aiogram bot (handlers, middleware, bot.py)
+├── docker-compose.yml  # Container orchestration
+├── pyproject.toml      # Unified dependencies
+└── .env.example        # Environment template
+```
+```
+
+### Accompanying Files (Keep them minimal)
+
+**`.env.example`**
+```env
+POSTGRES_DB=shopforbot
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_secure_password
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
+DJANGO_SETTINGS_MODULE=core.settings
+```
+
+**`.gitignore`**
+```text
+.venv/
+__pycache__/
+*.pyc
+.env
+media/
+staticfiles/
+.vscode/
+.idea/
+.DS_Store
+```
+
+This version is clean, direct, and ensures anyone (including your future self) knows exactly what to do to get the bot running, especially the critical "add token -> restart bot" step.
