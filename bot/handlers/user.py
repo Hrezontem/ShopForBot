@@ -1,3 +1,4 @@
+import keyboards.userkb as kb
 from aiogram import F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
@@ -9,9 +10,6 @@ from asgiref.sync import sync_to_async
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.urls.resolvers import re
-from phonenumber_field.validators import validate_international_phonenumber
-
-import keyboards.userkb as kb
 from handlers.callback_data import (
     AddToCartData,
     DeleteCartItemData,
@@ -19,15 +17,17 @@ from handlers.callback_data import (
     EditProfileData,
     ProductClickData,
 )
-from handlers.states import ProfileStates
+from handlers.states import OrderStates, ProfileStates
 from handlers.userfnc import (
     get_all_products,
     get_cart_with_items,
     get_product_with_variants,
 )
-from order.services import add_to_cart as add_to_cart_service, create_order
+from order.services import add_to_cart as add_to_cart_service
 from order.services import clear_cart as clear_cart_service
+from order.services import create_order
 from order.services import remove_cart_item as remove_cart_item_service
+from phonenumber_field.validators import validate_international_phonenumber
 from user.services import (
     get_or_create_user_from_telegram,
     get_user_from_telegram,
@@ -35,13 +35,13 @@ from user.services import (
 )
 
 user = Router()
-menu_photo = FSInputFile("./media/bot/menu.png")
+menu_photo = FSInputFile("./back/media/bot/menu.jpg")
 
 
 # Helpers
 
 
-REQUIRED = ["last_name","first_name", "phone", "address"]
+REQUIRED = ["last_name", "first_name", "phone", "address"]
 QUESTIONS = {
     "last_name": "Введите фамилию",
     "first_name": "Введите имя",
@@ -56,14 +56,15 @@ VALIDATORS = {
     "email": validate_email,
 }
 
+
 def normalize_phone(value):
     v = re.sub(r"[\s\-\(\)]", "", value.strip())
-    if v.startswith("8"):          # 8 999 ... → +7 999 ...
+    if v.startswith("8"):  # 8 999 ... → +7 999 ...
         v = "+7" + v[1:]
-    elif v.startswith("9"):        # 999 ... → +7 999 ...
+    elif v.startswith("9"):  # 999 ... → +7 999 ...
         v = "+7" + v
     elif v.startswith("7") and not v.startswith("+7"):
-        v = "+" + v                # 7999... → +7999...
+        v = "+" + v  # 7999... → +7999...
     return v
 
 
@@ -71,7 +72,7 @@ def validate_field(field, value):
     if not value:
         return None
     if field == "phone":
-        value = normalize_phone(value)   # приводим к +7...
+        value = normalize_phone(value)  # приводим к +7...
     validator = VALIDATORS.get(field)
     if validator:
         try:
@@ -117,29 +118,34 @@ def build_cart_text(items):
 
 
 DELIVERY_LABELS = {"post": "СДЭК ПВЗ", "courier": "СДЭК курьер"}
-async def render_checkout(callback, user, data):
+
+
+async def render_checkout(event, user, data):
     cart, items = await get_cart_with_items(user)
 
-    if cart is None or items == []:
-        await callback.message.edit_media(
-            media=InputMediaPhoto(media=menu_photo, caption="🛒 Ваша корзина пуста. Добавьте в корзину товар и оформите заказ."),
-            reply_markup=kb.cart_items_keyboard(items),
-        )
-        return
-    text = build_cart_text(items)
-    delivery = DELIVERY_LABELS.get(data.get("delivery", "post"))
-    comment = data.get("comment") or "—"
-    await callback.message.edit_media(
-        media=InputMediaPhoto(
-            media=menu_photo,
-            caption="🛒 Ваша корзина\n\n"
-            + f"{text}\n"
+    if cart is None or not items:
+        text = "🛒 Корзина пуста. Добавьте товар и оформите заказ."
+        markup = kb.cart_items_keyboard(items)
+    else:
+        delivery = DELIVERY_LABELS.get(data.get("delivery", "post"))
+        comment = data.get("comment") or "—"
+        text = (
+            "🛒 Ваш заказ\n\n"
+            + build_cart_text(items)
+            + "\n"
             + f"Итого: {cart.total_cart_cost} ₽\n"
             + f"🚚 Доставка: {delivery}\n"
             + f"💬 Комментарий: {comment}"
-        ),
-        reply_markup=kb.checkout_keyboard(),
-    )
+        )
+        markup = kb.checkout_keyboard()
+
+    if isinstance(event, CallbackQuery):
+        await event.message.edit_media(
+            media=InputMediaPhoto(media=menu_photo, caption=text),
+            reply_markup=markup,
+        )
+    else:
+        await event.answer_photo(menu_photo, caption=text, reply_markup=markup)
 
 
 async def render_cart(callback, user):
@@ -167,7 +173,7 @@ async def render_cart(callback, user):
 async def start(message: Message) -> None:
     await message.answer_photo(
         menu_photo,
-        caption=f"Добро пожаловать в ТЧК SHOP, {message.from_user.full_name}!",
+        caption=f"Добро пожаловать в shop name, {message.from_user.full_name}!",
         reply_markup=kb.main,
     )
 
@@ -178,7 +184,7 @@ async def send_main_menu(callback: CallbackQuery):
     await callback.message.edit_media(
         media=InputMediaPhoto(
             media=menu_photo,
-            caption=f"Добро пожаловать в ТЧК SHOP, {callback.from_user.full_name}!",
+            caption=f"Добро пожаловать в shop name, {callback.from_user.full_name}!",
         ),
         reply_markup=kb.main,
     )
@@ -188,7 +194,7 @@ async def send_main_menu(callback: CallbackQuery):
 async def show_about(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_caption(
-        caption=f"Корочи, наш бренд самый лучши, берите у нас, ибо мы руски с нами бог 🇷🇺🇷🇺🇷🇺.\n\nНа наших майках нет ни одной ворсинки, которой можно будет зацепиться за че-нибудь. \nА ещё наши изделия пропитаны специальными целебными маслами из подорожника, которые имеют эффект ускоренной регенерации на тот случай если поранитесь. \n\nПросто разорвите футболку, приложите к ране и исцеление на лицо :)) ",
+        caption=f"Описание бренда магазина",
         reply_markup=kb.to_main_menu_keyboard(),
     )
 
@@ -302,7 +308,6 @@ async def show_cart(callback: CallbackQuery):
     await render_cart(callback, django_user)
 
 
-
 def build_profile_text(user):
     return (
         "Ваш профиль\n\n"
@@ -318,9 +323,14 @@ def build_profile_text(user):
 async def render_profile(event, user):
     text = build_profile_text(user)
     if isinstance(event, CallbackQuery):
-        await event.message.edit_caption(caption=text, reply_markup=kb.profile_keyboard())
+        await event.message.edit_caption(
+            caption=text, reply_markup=kb.profile_keyboard()
+        )
     else:
-        await event.answer_photo(menu_photo, caption=text, reply_markup=kb.profile_keyboard())
+        await event.answer_photo(
+            menu_photo, caption=text, reply_markup=kb.profile_keyboard()
+        )
+
 
 @user.callback_query(F.data == "myprofile")
 async def show_profile(callback):
@@ -344,15 +354,18 @@ async def change_profile_field(
     await state.set_state(getattr(ProfileStates, callback_data.field))
     await state.update_data(mode="edit")
     await callback.answer()
-    await callback.message.edit_caption(caption=QUESTIONS[callback_data.field], reply_markup=kb.cancel_keyboard())
+    await callback.message.edit_caption(
+        caption=QUESTIONS[callback_data.field], reply_markup=kb.cancel_keyboard()
+    )
 
 
 @user.callback_query(F.data == "cancel_profile")
 async def cancel_profile(callback: CallbackQuery, state: FSMContext):
-    await state.clear()                      # выходим из FSM
+    await state.clear()  # выходим из FSM
     await callback.answer()
     django_user = await get_user_from_telegram(callback.from_user)
     await render_profile(callback, django_user)  # возвращаем интерфейс
+
 
 @user.message(ProfileStates.last_name)
 @user.message(ProfileStates.first_name)
@@ -372,7 +385,6 @@ async def save_profile_field(message: Message, state: FSMContext):
     django_user = await get_user_from_telegram(message.from_user)
     await sync_to_async(update_profile)(django_user, **{field: clean})
     await after_field_saved(message, state, django_user)
-
 
 
 @user.callback_query(F.data == "checkout")
@@ -395,6 +407,7 @@ async def checkout(callback: CallbackQuery, state: FSMContext):
     await state.set_data({"delivery": "post", "comment": ""})
     await render_checkout(callback, django_user, await state.get_data())
 
+
 @user.callback_query(F.data == "choice_delivery_method")
 async def choice_delivery(callback: CallbackQuery):
     await callback.answer()
@@ -402,6 +415,22 @@ async def choice_delivery(callback: CallbackQuery):
         caption="Выберите способ доставки:",
         reply_markup=kb.delivery_keyboard(),
     )
+
+
+@user.callback_query(F.data == "add_comment")
+async def add_comment(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(OrderStates.comment)
+    await callback.answer()
+    await callback.message.edit_caption(caption="Напишите комментарий:")
+
+
+@user.message(OrderStates.comment)
+async def save_comment(message: Message, state: FSMContext):
+    await state.update_data(comment=message.text.strip())
+    await state.set_state(None)
+    django_user = await get_user_from_telegram(message.from_user)
+    await render_checkout(message, django_user, await state.get_data())
+
 
 @user.callback_query(DeliveryData.filter())
 async def set_delivery(callback, callback_data: DeliveryData, state: FSMContext):
@@ -411,13 +440,13 @@ async def set_delivery(callback, callback_data: DeliveryData, state: FSMContext)
     await render_checkout(callback, django_user, await state.get_data())
 
 
-
 def order_success_text(order):
     return (
         f"✅ Заказ №{order.id} оформлен!\n"
         f"Итого: {order.total_order_cost} ₽\n"
         "Мы свяжемся с вами для подтверждения."
     )
+
 
 @user.callback_query(F.data == "checkout_confirm")
 async def checkout_confirm(callback: CallbackQuery, state: FSMContext):
@@ -437,7 +466,9 @@ async def checkout_confirm(callback: CallbackQuery, state: FSMContext):
         await callback.answer(str(e), show_alert=True)
         return
 
-    await state.clear()                      # заказ создан — checkout-данные больше не нужны
+    await state.clear()  # заказ создан — checkout-данные больше не нужны
     text = await sync_to_async(order_success_text)(order)
     await callback.answer()
-    await callback.message.edit_caption(caption=text, reply_markup=kb.to_main_menu_keyboard())
+    await callback.message.edit_caption(
+        caption=text, reply_markup=kb.to_main_menu_keyboard()
+    )

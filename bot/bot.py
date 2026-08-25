@@ -1,17 +1,25 @@
 import asyncio
 import logging
 import os
+import sys
+from pathlib import Path
+
+BACK_DIR = Path(__file__).resolve().parent.parent / "back"
+if str(BACK_DIR) not in sys.path:
+    sys.path.insert(0, str(BACK_DIR))
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 
 import django
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 django.setup()
+
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from asgiref.sync import sync_to_async
-
 from bot_settings.models import BotConfiguration
 from handlers.user import user
 from middleware.logging import LoggingMiddleware

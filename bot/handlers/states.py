@@ -11,5 +11,4 @@ class ProfileStates(StatesGroup):
 
 
 class OrderStates(StatesGroup):
-    delivery_method = State()
     comment = State()

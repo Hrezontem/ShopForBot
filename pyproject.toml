@@ -1,7 +1,7 @@
 [project]
-name = "TCHKShop"
+name = "ShopForBot"
 version = "0.1.0"
-description = "Система для продажи тканевых изделий магазина TCHK"
+description = ""
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

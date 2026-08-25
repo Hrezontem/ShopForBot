@@ -1,8 +1,6 @@
-
 from aiogram.types.inline_keyboard_button import InlineKeyboardButton
 from aiogram.types.inline_keyboard_markup import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-
 from handlers.callback_data import (
     AddToCartData,
     ChangeCartItemData,
@@ -21,9 +19,7 @@ main = InlineKeyboardMarkup(
         ],
         [
             InlineKeyboardButton(text="📏 Подобрать размер", callback_data="picksize"),
-            InlineKeyboardButton(
-                text="🚚 Профиль", callback_data="myprofile"
-            ),
+            InlineKeyboardButton(text="🚚 Профиль", callback_data="myprofile"),
         ],
         [
             InlineKeyboardButton(text="🤍 О бренде", callback_data="about"),
@@ -46,10 +42,12 @@ def to_main_menu_keyboard() -> InlineKeyboardMarkup:
 
     return builder.as_markup()
 
+
 def cancel_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="❌ Отмена", callback_data="cancel_profile")
     return builder.as_markup()
+
 
 def cart_keyboard(items) -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
@@ -126,12 +124,19 @@ def profile_keyboard() -> InlineKeyboardMarkup:
     builder.adjust(1)
     return builder.as_markup()
 
+
 def change_profile_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.button(text="Фамилию", callback_data=EditProfileData(field="last_name").pack())
+    builder.button(
+        text="Фамилию", callback_data=EditProfileData(field="last_name").pack()
+    )
     builder.button(text="Имя", callback_data=EditProfileData(field="first_name").pack())
-    builder.button(text="Отчество", callback_data=EditProfileData(field="mid_name").pack())
-    builder.button(text="Номер телефона", callback_data=EditProfileData(field="phone").pack())
+    builder.button(
+        text="Отчество", callback_data=EditProfileData(field="mid_name").pack()
+    )
+    builder.button(
+        text="Номер телефона", callback_data=EditProfileData(field="phone").pack()
+    )
     builder.button(text="Почту", callback_data=EditProfileData(field="email").pack())
     builder.button(text="Адрес", callback_data=EditProfileData(field="address").pack())
     builder.adjust(2)
@@ -141,7 +146,9 @@ def change_profile_keyboard() -> InlineKeyboardMarkup:
 
 def checkout_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.button(text="Выбрать способ доставки", callback_data="choice_delivery_method")
+    builder.button(
+        text="Выбрать способ доставки", callback_data="choice_delivery_method"
+    )
     builder.button(text="Добавить комментарий", callback_data="add_comment")
     builder.button(text="✅ Оформить заказ", callback_data="checkout_confirm")
     builder.button(text="❌ Выйти", callback_data="main_menu")
@@ -152,6 +159,8 @@ def checkout_keyboard() -> InlineKeyboardMarkup:
 def delivery_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="СДЭК ПВЗ", callback_data=DeliveryData(method="post").pack())
-    builder.button(text="СДЭК Курьер", callback_data=DeliveryData(method="courier").pack())
+    builder.button(
+        text="СДЭК Курьер", callback_data=DeliveryData(method="courier").pack()
+    )
     builder.adjust(1)
     return builder.as_markup()
